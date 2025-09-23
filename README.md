@@ -1,7 +1,3 @@
-https://acycliq.github.io/deckgl_viewer/
+https://acycliq.github.io/deckgl_viewer_2/
 
 
-
-# Counts per Class
- 
-[View interactive charts](https://acycliq.github.io/deckgl_viewer/counts_per_class.html)
