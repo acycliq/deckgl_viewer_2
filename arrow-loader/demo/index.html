@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Arrow Loader Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0e0e10; color:#e8e8f0; margin:0; }
+    .wrap { padding: 16px; max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    .log { white-space: pre-wrap; background:#14141a; padding:8px 10px; border-radius:6px; margin-top:8px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+    canvas { background:#000; border:1px solid #333; width: 100%; height: 420px; }
+    input, button { background:#14141a; color:#e8e8f0; border:1px solid #333; border-radius:6px; padding:6px 8px; }
+    button { cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Arrow Loader Demo</h1>
+    <div>
+      <label>Plane <input id="plane" type="number" value="8" style="width:80px;" /></label>
+      <button id="load">Load Boundaries</button>
+    </div>
+    <canvas id="plot" width="840" height="420"></canvas>
+    <div id="out" class="log"></div>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+

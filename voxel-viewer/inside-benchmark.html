@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Voxel Inside Test Benchmark (Ray-cast vs Raster Mask)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0e0e10; color:#e8e8f0; margin:0; }
+    .wrap { padding: 16px; display: grid; grid-template-columns: 1fr 380px; gap: 16px; }
+    .panel { background:#14141a; border:1px solid #2a2a32; border-radius: 10px; padding: 16px; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    h2 { font-size: 15px; margin: 16px 0 8px; }
+    code { background:#1b1b22; padding:2px 5px; border-radius:4px; }
+    .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .controls input[type="number"] { width: 80px; padding:4px 6px; background:#0f0f14; color:#e8e8f0; border:1px solid #30303a; border-radius:6px; }
+    .controls button { padding:8px 10px; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; }
+    .controls button:disabled { opacity: 0.6; cursor: default; }
+    .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; }
+    .card { background:#0f0f14; border:1px solid #242430; padding:12px; border-radius:8px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+    .ok { color:#2ea043; }
+    .warn { color:#f59e0b; }
+    .bad { color:#ef4444; }
+    canvas { background:#0b0b0f; border:1px solid #2a2a32; border-radius: 8px; width: 100%; height: auto; image-rendering: pixelated; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h1>Voxel Inside Test Benchmark</h1>
+      <div class="controls">
+        <label>Width <input id="width" type="number" value="256" min="8" step="8"></label>
+        <label>Height <input id="height" type="number" value="256" min="8" step="8"></label>
+        <label>Cells <input id="cells" type="number" value="12" min="1" step="1"></label>
+        <label>Planes <input id="planes" type="number" value="1" min="1" step="1"></label>
+        <button id="runBtn">Run Benchmark</button>
+      </div>
+      <h2>Preview</h2>
+      <canvas id="preview" width="512" height="512"></canvas>
+    </div>
+    <div class="panel">
+      <h2>Results</h2>
+      <div class="grid">
+        <div class="card" id="raycastCard">Ray-cast</div>
+        <div class="card" id="maskCard">Raster Mask</div>
+      </div>
+      <h2>Details</h2>
+      <div class="card" id="details"></div>
+      <h2>Notes</h2>
+      <div class="mono">
+        - Ray-cast: per-voxel, per-cell, per-edge checks (odd-even rule).<br>
+        - Raster mask: draw all cells into an offscreen canvas once (per plane), then O(1) lookup per voxel.<br>
+        - Mask labeling encodes cellId into RGB to keep O(1) lookup of which cell contains the voxel.<br>
+        - Sampling at voxel centers implicitly via raster fill (boundary pixels included).
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Utility: generate random-ish convex-ish polygons inside the grid
+  function randomPolygon(cx, cy, radius, points=8, jitter=0.4) {
+    const poly = [];
+    for (let i=0;i<points;i++) {
+      const a = (i/points) * Math.PI * 2;
+      const r = radius * (0.6 + Math.random()*jitter);
+      poly.push([cx + Math.cos(a)*r, cy + Math.sin(a)*r]);
+    }
+    return poly;
+  }
+
+  // Ray-cast test (strict inequalities as in current code)
+  function pointInPolygonRay(x, y, poly) {
+    let inside = false;
+    for (let i=0, j=poly.length-1; i<poly.length; j=i++) {
+      const [xi, yi] = poly[i];
+      const [xj, yj] = poly[j];
+      if (((yi>y)!=(yj>y)) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
+  // Build per-plane label mask using a Canvas (RGB encodes cellId)
+  function buildPlaneLabelMask(width, height, cells) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,width,height);
+    // Draw each cell with a unique RGB mapping to its id
+    for (const cell of cells) {
+      const id = cell.cellId;
+      const r = id & 255, g = (id>>8)&255, b = (id>>16)&255;
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.beginPath();
+      cell.polygon.forEach(([x,y], idx) => {
+        if (idx===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fill('evenodd');
+    }
+    const img = ctx.getImageData(0,0,width,height).data; // RGBA
+    const labels = new Uint32Array(width*height);
+    for (let i=0, p=0; i<labels.length; i++, p+=4) {
+      const r=img[p], g=img[p+1], b=img[p+2];
+      labels[i] = (r | (g<<8) | (b<<16));
+    }
+    return {labels, width, height, canvas};
+  }
+
+  // Benchmark harness
+  async function runBenchmark() {
+    const W = parseInt(document.getElementById('width').value, 10);
+    const H = parseInt(document.getElementById('height').value, 10);
+    const C = parseInt(document.getElementById('cells').value, 10);
+    const P = parseInt(document.getElementById('planes').value, 10);
+
+    // Generate synthetic dataset (non-overlapping-ish polygons per plane)
+    const rng = Math.random;
+    const planes = [];
+    const tGenStart = performance.now();
+    for (let p=0; p<P; p++) {
+      const planeCells = [];
+      for (let c=0; c<C; c++) {
+        const cx = (W/(Math.sqrt(C)+1)) * ((c % Math.ceil(Math.sqrt(C))) + 1);
+        const cy = (H/(Math.sqrt(C)+1)) * (Math.floor(c / Math.ceil(Math.sqrt(C))) + 1);
+        const radius = Math.min(W,H) / (3*Math.sqrt(C)) * (0.8 + 0.4*rng());
+        const poly = randomPolygon(cx, cy, radius, 10, 0.5).map(([x,y]) => [
+          Math.min(W-1, Math.max(0, x)),
+          Math.min(H-1, Math.max(0, y))
+        ]);
+        planeCells.push({ cellId: c+1, polygon: poly });
+      }
+      planes.push(planeCells);
+    }
+    const tGen = performance.now() - tGenStart;
+
+    // Ray-cast benchmark (per voxel, per cell)
+    const tRayStart = performance.now();
+    let insideCountRay = 0, lastCellRay = 0;
+    for (let p=0; p<P; p++) {
+      const cells = planes[p];
+      for (let y=0; y<H; y++) {
+        for (let x=0; x<W; x++) {
+          let found = 0;
+          for (let k=0; k<cells.length; k++) {
+            if (pointInPolygonRay(x+0.5, y+0.5, cells[k].polygon)) { found = cells[k].cellId; break; }
+          }
+          if (found) { insideCountRay++; lastCellRay = found; }
+        }
+      }
+    }
+    const tRay = performance.now() - tRayStart;
+
+    // Raster mask benchmark (build once per plane, then O(1) lookups)
+    const tMaskBuildStart = performance.now();
+    const planeMasks = [];
+    for (let p=0; p<P; p++) planeMasks.push(buildPlaneLabelMask(W, H, planes[p]));
+    const tMaskBuild = performance.now() - tMaskBuildStart;
+
+    const tMaskLookupStart = performance.now();
+    let insideCountMask = 0, lastCellMask = 0;
+    for (let p=0; p<P; p++) {
+      const {labels} = planeMasks[p];
+      for (let y=0; y<H; y++) {
+        for (let x=0; x<W; x++) {
+          const id = labels[y*W + x];
+          if (id) { insideCountMask++; lastCellMask = id; }
+        }
+      }
+    }
+    const tMaskLookup = performance.now() - tMaskLookupStart;
+
+    // Render preview (plane 0)
+    const canvas = document.getElementById('preview');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const scale = Math.min(canvas.width/W, canvas.height/H);
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#0b0b0f';
+    ctx.fillRect(0,0,W,H);
+    // draw mask
+    const imgData = ctx.createImageData(W, H);
+    const data = imgData.data;
+    const labels0 = planeMasks[0].labels;
+    for (let i=0, p=0; i<labels0.length; i++, p+=4) {
+      const id = labels0[i];
+      if (id) {
+        data[p] = (id & 255);
+        data[p+1] = ((id>>8) & 255);
+        data[p+2] = ((id>>16) & 255);
+        data[p+3] = 255;
+      } else {
+        data[p] = data[p+1] = data[p+2] = 0; data[p+3] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    ctx.restore();
+
+    // Update UI
+    const rc = document.getElementById('raycastCard');
+    const mc = document.getElementById('maskCard');
+    rc.innerHTML = `
+      <div><strong>Ray-cast</strong></div>
+      <div>Compute: <span class="bad">${tRay.toFixed(1)} ms</span></div>
+      <div>Inside count: ${insideCountRay}</div>
+      <div>Last cell: ${lastCellRay}</div>
+    `;
+    mc.innerHTML = `
+      <div><strong>Raster Mask</strong></div>
+      <div>Build: <span class="warn">${tMaskBuild.toFixed(1)} ms</span></div>
+      <div>Lookup: <span class="ok">${tMaskLookup.toFixed(1)} ms</span></div>
+      <div>Total: <span class="ok">${(tMaskBuild + tMaskLookup).toFixed(1)} ms</span></div>
+      <div>Inside count: ${insideCountMask}</div>
+      <div>Last cell: ${lastCellMask}</div>
+    `;
+    document.getElementById('details').innerHTML = `
+      Generated ${P} plane(s) with ${C} cell(s) each in ${tGen.toFixed(1)} ms.<br>
+      Grid: ${W} × ${H} = ${(W*H).toLocaleString()} voxels per plane.<br>
+      Speedup (lookup-only): ${(tRay / tMaskLookup).toFixed(1)}×; including build: ${(tRay / (tMaskBuild+tMaskLookup)).toFixed(1)}×.
+    `;
+  }
+
+  document.getElementById('runBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true; btn.textContent = 'Running…';
+    try {
+      await runBenchmark();
+    } finally {
+      btn.disabled = false; btn.textContent = 'Run Benchmark';
+    }
+  });
+
+  // Auto-run once on load
+  window.addEventListener('load', () => {
+    document.getElementById('runBtn').click();
+  });
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Real Data Bug Demo (Example 2: Ray-cast vs Raster Mask)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0e0e10; color:#e8e8f0; margin:0; }
+    .wrap { display:flex; gap:24px; padding:16px; }
+    .panel { background:#15151a; border:1px solid #2a2a32; border-radius:10px; padding:16px; }
+    .canvas-panel { flex: 0 0 auto; }
+    .info-panel { flex: 1 1 auto; max-width: 720px; }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    h2 { font-size: 16px; margin: 16px 0 8px; }
+    code { background:#1c1c23; padding:2px 6px; border-radius:6px; }
+    .legend { display:flex; gap:12px; flex-wrap:wrap; font-size: 12px; margin-top:8px; }
+    .legend-item { display:flex; align-items:center; gap:6px; }
+    .swatch { width:14px; height:14px; border-radius:3px; border:1px solid #444; }
+    .swatch.inside { background:#2ea043; }
+    .swatch.outside { background:#6b7280; }
+    .swatch.edge { background:#f59e0b; }
+    .swatch.fail { background:#ef4444; }
+    .note { color:#b0b0c0; font-size: 13px; line-height:1.5; }
+    .list { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; background:#101015; border:1px solid #2a2a32; border-radius:8px; padding:8px; max-height: 220px; overflow:auto; white-space: pre; }
+    .controls { display:flex; gap:12px; align-items:center; margin:8px 0 0; flex-wrap: wrap; }
+    .kbd { display:inline-block; border:1px solid #3a3a44; background:#1d1d25; padding:0 6px; border-radius:4px; font-family:ui-monospace, monospace; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel canvas-panel">
+      <h1>Real Data Bug Demo — Example 2</h1>
+      <canvas id="c" width="1000" height="900" style="background:#0b0b0f; display:block; border-radius:10px; border:1px solid #2a2a32;"></canvas>
+      <div class="legend">
+        <div class="legend-item"><span class="swatch inside"></span> Inside (strict ray-cast)</div>
+        <div class="legend-item"><span class="swatch outside"></span> Outside (strict ray-cast)</div>
+        <div class="legend-item"><span class="swatch edge"></span> On polygon edge</div>
+        <div class="legend-item"><span class="swatch fail"></span> Failure: on-edge but classified outside</div>
+      </div>
+      <div class="controls">
+        <label><input type="checkbox" id="showCenters"> Show center-sampling overlay</label>
+        <label><input type="checkbox" id="showLabels" checked> Show failing point labels</label>
+        <label><input type="checkbox" id="showMaskOverlay"> Show raster-mask overlay</label>
+        <span class="note">Click any grid point to trace ray-cast with real numbers.</span>
+      </div>
+    </div>
+
+    <div class="panel info-panel">
+      <h2>Input (Real)</h2>
+      <div class="note" id="bboxInfo"></div>
+      <div class="note" id="boundsInfo"></div>
+
+      <h2>Cell Boundary (N pts)</h2>
+      <div class="list" id="polyList"></div>
+
+      <h2>Failing Points (strict corner sampling)</h2>
+      <div class="list" id="failList"></div>
+
+      <h2>Benchmark</h2>
+      <div class="list" id="benchList">Building…</div>
+
+      <h2>Ray-cast Trace</h2>
+      <div class="note">Condition: <code>((yi &gt; y) !== (yj &gt; y)) &amp;&amp; x &lt; (xj - xi) * (y - yi) / (yj - yi) + xi</code></div>
+      <div class="list" id="traceList">Click a grid point to see per-edge calculations…</div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    // Real-world bounding box (pixel space)
+    const bbox = {
+      left: 3177.442040453849,
+      top: 2003.29974182,
+      right: 3219.2514413516587,
+      bottom: 2065.367306041044,
+      depth: 254.99999999999994
+    };
+
+    // Real-world polygon (provided)
+    const polygon = [
+      [3187, 2027],
+      [3188, 2026],
+      [3188, 2023],
+      [3189, 2022],
+      [3189, 2020.0000000000002],
+      [3191, 2016.0000000000002],
+      [3195, 2013.0000000000002],
+      [3201, 2013.0000000000002],
+      [3205.9999999999995, 2019.0000000000002],
+      [3210.0000000000005, 2027],
+      [3210.0000000000005, 2032.0000000000002],
+      [3211.0000000000005, 2033.0000000000002],
+      [3210.0000000000005, 2041.0000000000002],
+      [3208.0000000000005, 2043],
+      [3208.0000000000005, 2044],
+      [3203, 2048],
+      [3201, 2048],
+      [3200, 2049],
+      [3194, 2048],
+      [3188, 2043],
+      [3187, 2041.0000000000002],
+      [3187, 2027]
+    ];
+
+    // Strict ray casting (as in current code)
+    function isPointInPolygonStrict(x, y, poly) {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i];
+        const [xj, yj] = poly[j];
+        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }
+    function isPointOnSegment(x, y, x1, y1, x2, y2, eps = 1e-9) {
+      if (x < Math.min(x1,x2) - eps || x > Math.max(x1,x2) + eps ||
+          y < Math.min(y1,y2) - eps || y > Math.max(y1,y2) + eps) return false;
+      const cross = (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1);
+      return Math.abs(cross) <= eps;
+    }
+    function onWhichEdge(x, y, poly, eps = 1e-9) {
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [x1,y1] = poly[j];
+        const [x2,y2] = poly[i];
+        if (isPointOnSegment(x,y,x1,y1,x2,y2,eps)) {
+          let edgeLabel = `edge (${x1},${y1})–(${x2},${y2})`;
+          if (Math.abs(y1 - y2) <= eps) edgeLabel = `edge y=${y1}`;
+          if (Math.abs(x1 - x2) <= eps) edgeLabel = `edge x=${x1}`;
+          return {x1,y1,x2,y2,edgeLabel};
+        }
+      }
+      return null;
+    }
+
+    // Integer bounds (current) and center-aligned (reference)
+    const intBounds = {
+      left: Math.floor(bbox.left),
+      top: Math.floor(bbox.top),
+      right: Math.floor(bbox.right),
+      bottom: Math.floor(bbox.bottom)
+    };
+    const centerBounds = {
+      left: Math.ceil(bbox.left - 0.5),
+      top: Math.ceil(bbox.top - 0.5),
+      right: Math.floor(bbox.right - 0.5),
+      bottom: Math.floor(bbox.bottom - 0.5)
+    };
+
+    // Canvas helpers
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const PAD = 40;
+    const widthUnits = intBounds.right - intBounds.left + 1;
+    const heightUnits = intBounds.bottom - intBounds.top + 1;
+    const SCALE = Math.min((canvas.width - 2*PAD) / widthUnits, (canvas.height - 2*PAD) / heightUnits);
+    function toPx(x, y) {
+      const sx = PAD + (x - intBounds.left) * SCALE;
+      const sy = canvas.height - (PAD + (y - intBounds.top) * SCALE);
+      return [sx, sy];
+    }
+    function fromPx(sx, sy) {
+      const x = (sx - PAD) / SCALE + intBounds.left;
+      const y = (canvas.height - sy - PAD) / SCALE + intBounds.top;
+      return [x, y];
+    }
+
+    function drawGrid() {
+      ctx.save(); ctx.lineWidth=1; ctx.strokeStyle='#2a2a32';
+      const [x1,y1] = toPx(intBounds.left, intBounds.top);
+      const [x2,y2] = toPx(intBounds.right, intBounds.bottom);
+      ctx.strokeRect(x1, y2, x2 - x1, y1 - y2);
+      ctx.font='10px ui-monospace, monospace'; ctx.fillStyle='#9aa0a6';
+      ctx.textAlign='center';
+      for (let x=intBounds.left; x<=intBounds.right; x++) {
+        const [gx1, gy1] = toPx(x, intBounds.top);
+        const [gx2, gy2] = toPx(x, intBounds.bottom);
+        ctx.strokeStyle = (x % 5 === 0) ? '#3a3a44' : '#2a2a32';
+        ctx.beginPath(); ctx.moveTo(gx1, gy1); ctx.lineTo(gx2, gy2); ctx.stroke();
+        ctx.fillText(String(x), gx1, gy1 + 14);
+      }
+      ctx.textAlign='right';
+      for (let y=intBounds.top; y<=intBounds.bottom; y++) {
+        const [gx1, gy1] = toPx(intBounds.left, y);
+        const [gx2, gy2] = toPx(intBounds.right, y);
+        ctx.strokeStyle = (y % 5 === 0) ? '#3a3a44' : '#2a2a32';
+        ctx.beginPath(); ctx.moveTo(gx1, gy1); ctx.lineTo(gx2, gy2); ctx.stroke();
+        ctx.fillText(String(y), gx1 - 10, gy1 + 3);
+      }
+      ctx.restore();
+    }
+    function drawBBox() {
+      ctx.save(); ctx.lineWidth=1.5; ctx.strokeStyle='#7c3aed';
+      const [bx1, by1] = toPx(bbox.left, bbox.top);
+      const [bx2, by2] = toPx(bbox.right, bbox.bottom);
+      ctx.setLineDash([6,4]); ctx.strokeRect(bx1, by2, bx2-bx1, by1-by2); ctx.setLineDash([]);
+      ctx.fillStyle='#b19cd9'; ctx.font='12px ui-monospace, monospace';
+      ctx.fillText('float bbox', bx1 + 60, by2 - 8); ctx.restore();
+    }
+    function drawPolygon() {
+      ctx.save(); ctx.lineWidth=2; ctx.strokeStyle='#60a5fa'; ctx.fillStyle='rgba(96,165,250,0.08)';
+      ctx.beginPath();
+      polygon.forEach(([x,y], i) => { const [px,py]=toPx(x,y); if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+      const [p0x,p0y]=toPx(polygon[0][0],polygon[0][1]); ctx.lineTo(p0x,p0y); ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+
+    // Raster mask
+    let rasterMask = null;
+    function buildRasterMask() {
+      const W = intBounds.right - intBounds.left + 1;
+      const H = intBounds.bottom - intBounds.top + 1;
+      const cv = document.createElement('canvas'); cv.width=W; cv.height=H;
+      const c2d = cv.getContext('2d'); c2d.clearRect(0,0,W,H);
+      c2d.fillStyle='rgba(255,0,0,1)';
+      c2d.beginPath();
+      polygon.forEach(([x,y], i) => { const sx=x-intBounds.left, sy=y-intBounds.top; if(i===0) c2d.moveTo(sx,sy); else c2d.lineTo(sx,sy); });
+      c2d.closePath(); c2d.fill('evenodd');
+      const img = c2d.getImageData(0,0,W,H).data; rasterMask = {width:W,height:H,alpha:img,canvas:cv};
+    }
+
+    let selectedPoint = null;
+    function drawPoints() {
+      const showCenters = document.getElementById('showCenters').checked;
+      const showLabels = document.getElementById('showLabels').checked;
+      const showMask = document.getElementById('showMaskOverlay').checked;
+      const failures = [];
+      for (let y=intBounds.top; y<=intBounds.bottom; y++) {
+        for (let x=intBounds.left; x<=intBounds.right; x++) {
+          const edgeInfo = onWhichEdge(x, y, polygon, 1e-12);
+          const onEdge = !!edgeInfo;
+          const insideStrict = isPointInPolygonStrict(x, y, polygon);
+          let color = insideStrict ? '#2ea043' : '#6b7280';
+          if (onEdge && !insideStrict) color = '#ef4444';
+          const [px,py]=toPx(x,y);
+          ctx.save(); ctx.fillStyle=color; ctx.beginPath(); ctx.arc(px,py,4.5,0,Math.PI*2); ctx.fill();
+          if (onEdge) { ctx.lineWidth=2; ctx.strokeStyle='#f59e0b'; ctx.stroke(); }
+          if (selectedPoint && selectedPoint.x===x && selectedPoint.y===y) { ctx.lineWidth=3; ctx.strokeStyle='#22d3ee'; ctx.beginPath(); ctx.arc(px,py,8,0,Math.PI*2); ctx.stroke(); }
+          if (onEdge && !insideStrict) { failures.push([x,y,edgeInfo.edgeLabel]); if (showLabels) { ctx.fillStyle='#ef4444'; ctx.font='12px ui-monospace, monospace'; ctx.textAlign='left'; ctx.fillText(`(${x},${y}) on ${edgeInfo.edgeLabel} -> outside`, px+8, py-8); } }
+          ctx.restore();
+          if (showCenters) { const cs = isPointInPolygonStrict(x+0.5,y+0.5,polygon)||onWhichEdge(x+0.5,y+0.5,polygon,1e-12); const[cx,cy]=toPx(x+0.5,y+0.5); ctx.save(); ctx.strokeStyle=cs?'rgba(46,160,67,0.9)':'rgba(107,114,128,0.9)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+          if (showMask && rasterMask) { const idx=(y-intBounds.top)*rasterMask.width+(x-intBounds.left); const a=rasterMask.alpha[(idx<<2)+3]; const mi=a>0; const[mx,my]=toPx(x+0.5,y+0.5); ctx.save(); ctx.strokeStyle=mi?'rgba(34,211,238,0.9)':'rgba(107,114,128,0.5)'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.arc(mx,my,6.5,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+        }
+      }
+      const list = document.getElementById('failList');
+      if (failures.length===0) list.textContent='No failures under strict corner sampling.'; else list.textContent=failures.map(([x,y,label])=>`(${x}, ${y}) on ${label} → classified outside`).join('\n');
+    }
+
+    function generateRaycastTrace(ix, iy, poly) {
+      const lines = []; let inside=false;
+      for (let i=0, j=poly.length-1; i<poly.length; j=i++) {
+        const [xi, yi] = poly[i]; const [xj, yj] = poly[j];
+        const condA_left = yi > iy; const condA_right = yj > iy; const condA = (condA_left !== condA_right);
+        let xIntersect = NaN; let condB = false; if (condA) { xIntersect=(xj-xi)*(iy-yi)/(yj-yi)+xi; condB=ix<xIntersect; if (condB) inside=!inside; }
+        lines.push({i,j,xi,yi,xj,yj,y:iy,x:ix,condA_left,condA_right,condA,xIntersect,condB,toggled:condA&&condB,insideAfter:inside});
+      }
+      return { steps: lines, finalInside: inside };
+    }
+    function renderTrace(ix, iy) {
+      const t=generateRaycastTrace(ix,iy,polygon); const el=document.getElementById('traceList');
+      const head=`Point (x=${ix}, y=${iy}) — strict ray-cast trace\n`;
+      const rows=t.steps.map(s=>{const xInt=Number.isFinite(s.xIntersect)?s.xIntersect.toFixed(6):'—'; return(`edge j→i=(${s.j}→${s.i})  xi=${s.xi}, yi=${s.yi}; xj=${s.xj}, yj=${s.yj} | ((yi>y)!=(yj>y))=${s.condA_left}>${s.y}? ${s.condA_left} ; ${s.condA_right}>${s.y}? ${s.condA_right} ⇒ ${s.condA} | xIntersect=${xInt} | x<xi? ${s.x}<${xInt} ⇒ ${s.condB} | toggled=${s.toggled} | inside=${s.insideAfter}`); });
+      el.textContent=head+rows.join('\n')+`\n\nFinal inside=${t.finalInside}`;
+    }
+
+    // Benchmarks
+    function buildMaskAndBenchmark() {
+      const xs=[], ys=[]; for (let y=intBounds.top;y<=intBounds.bottom;y++) ys.push(y); for (let x=intBounds.left;x<=intBounds.right;x++) xs.push(x);
+      const total=xs.length*ys.length; const bench=document.getElementById('benchList');
+      let t0=performance.now(); let rayInside=0; ys.forEach(y=>xs.forEach(x=>{ if(isPointInPolygonStrict(x,y,polygon)) rayInside++; })); const tRay=performance.now()-t0;
+      t0=performance.now(); buildRasterMask(); const tBuild=performance.now()-t0; t0=performance.now(); let maskInside=0; ys.forEach(y=>xs.forEach(x=>{ const idx=(y-intBounds.top)*rasterMask.width+(x-intBounds.left); if(rasterMask.alpha[(idx<<2)+3]>0) maskInside++; })); const tLookup=performance.now()-t0;
+      bench.textContent=`Grid ${xs.length}×${ys.length} = ${total} voxels\nRay-cast: ${tRay.toFixed(3)} ms, inside=${rayInside}\nMask: build ${tBuild.toFixed(3)} ms, lookup ${tLookup.toFixed(3)} ms, total ${(tBuild+tLookup).toFixed(3)} ms, inside=${maskInside}\nSpeedup (lookup-only): ${(tRay/tLookup).toFixed(2)}×; including build: ${(tRay/(tBuild+tLookup)).toFixed(2)}×`;
+    }
+
+    // UI wiring
+    function redraw(){ ctx.clearRect(0,0,canvas.width,canvas.height); drawGrid(); drawBBox(); drawPolygon(); drawPoints(); }
+    document.getElementById('showCenters').addEventListener('change', redraw);
+    document.getElementById('showLabels').addEventListener('change', redraw);
+    document.getElementById('showMaskOverlay').addEventListener('change', redraw);
+    canvas.addEventListener('click', (evt)=>{ const rect=canvas.getBoundingClientRect(); const [dx,dy]=fromPx(evt.clientX-rect.left, evt.clientY-rect.top); const ix=Math.round(dx), iy=Math.round(dy); if(ix<intBounds.left||ix>intBounds.right||iy<intBounds.top||iy>intBounds.bottom){ selectedPoint=null; redraw(); return;} selectedPoint={x:ix,y:iy}; renderTrace(ix,iy); redraw(); });
+    document.getElementById('bboxInfo').innerHTML = `Float bbox: left=<code>${bbox.left.toFixed(6)}</code>, top=<code>${bbox.top.toFixed(6)}</code>, right=<code>${bbox.right.toFixed(6)}</code>, bottom=<code>${bbox.bottom.toFixed(6)}</code>, depth=<code>${bbox.depth}</code>`;
+    document.getElementById('boundsInfo').innerHTML = `Integer bounds (current): left=<code>${intBounds.left}</code>, top=<code>${intBounds.top}</code>, right=<code>${intBounds.right}</code>, bottom=<code>${intBounds.bottom}</code><br>Center-aligned bounds: left=<code>${centerBounds.left}</code>, top=<code>${centerBounds.top}</code>, right=<code>${centerBounds.right}</code>, bottom=<code>${centerBounds.bottom}</code>`;
+    document.getElementById('polyList').textContent = polygon.map(p => `[${p[0]}, ${p[1]}]`).join('\n');
+    buildMaskAndBenchmark(); redraw();
+  })();
+  </script>
+</body>
+</html>
+

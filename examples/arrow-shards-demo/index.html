@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Arrow Shards Demo (Zero-Copy TypedArrays)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0e0e10; color:#e8e8f0; margin:0; }
+    .wrap { padding: 16px; max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    code, pre { background:#14141a; color:#e8e8f0; padding:8px 10px; border-radius:8px; }
+    .note { color:#b0b0c0; font-size: 13px; line-height:1.5; }
+    .log { white-space: pre-wrap; background:#14141a; padding:8px 10px; border-radius:6px; margin-top:8px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+    canvas { background:#000; border:1px solid #333; width: 100%; height: 420px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Arrow Shards Demo (Zero-Copy TypedArrays)</h1>
+    <div class="note">
+      This demo loads Arrow Feather shards created from <code>geneData.tsnice v</code>, decodes them into zero-copy TypedArrays,
+      and plots a small sample on a canvas. It is not tied to the main UI.
+    </div>
+    <p class="note">
+      Configure <code>manifestUrl</code> in <code>arrow-loader.js</code> to point to your generated shards
+      (e.g., <code>./data/arrow_spots/manifest.json</code>).
+    </p>
+    <h2 style="font-size:14px; margin-top:16px;">Spots (Arrow shards)</h2>
+    <canvas id="plotSpots" width="800" height="340"></canvas>
+    <h2 style="font-size:14px; margin-top:16px;">Cells (Arrow shards)</h2>
+    <canvas id="plotCells" width="800" height="340"></canvas>
+    <h2 style="font-size:14px; margin-top:16px;">Boundaries (Arrow shards)</h2>
+    <canvas id="plotBoundaries" width="800" height="340"></canvas>
+
+    <h2 style="font-size:14px; margin-top:16px;">Boundary by Cell</h2>
+    <div class="note" style="margin-bottom:8px;">
+      Enter a <code>cell_num</code> (matches <code>label</code> in plane TSVs) and plot its boundaries across all planes.
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+      <input id="cellInput" type="number" placeholder="Enter cell_num (label)" style="width:220px; padding:6px 8px; border-radius:6px; border:1px solid #333; background:#14141a; color:#e8e8f0;" />
+      <button id="plotCellBtn" style="padding:6px 10px; border-radius:6px; border:1px solid #333; background:#1f2937; color:#e8e8f0; cursor:pointer;">Plot Cell Boundaries</button>
+    </div>
+    <canvas id="plotCellBoundary" width="800" height="340"></canvas>
+
+    <h2 style="font-size:14px; margin-top:16px;">Boundaries by BBox + Plane</h2>
+    <div class="note" style="margin-bottom:8px;">
+      Enter a bounding box in the same pixel space as the boundary coordinates, and a plane id.
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px;">
+      <label>plane_id <input id="planeInput" type="number" style="width:100px; padding:6px 8px; border-radius:6px; border:1px solid #333; background:#14141a; color:#e8e8f0;" /></label>
+      <label>xmin <input id="xminInput" type="number" style="width:120px; padding:6px 8px; border-radius:6px; border:1px solid #333; background:#14141a; color:#e8e8f0;" /></label>
+      <label>ymin <input id="yminInput" type="number" style="width:120px; padding:6px 8px; border-radius:6px; border:1px solid #333; background:#14141a; color:#e8e8f0;" /></label>
+      <label>xmax <input id="xmaxInput" type="number" style="width:120px; padding:6px 8px; border-radius:6px; border:1px solid #333; background:#14141a; color:#e8e8f0;" /></label>
+      <label>ymax <input id="ymaxInput" type="number" style="width:120px; padding:6px 8px; border-radius:6px; border:1px solid #333; background:#14141a; color:#e8e8f0;" /></label>
+      <button id="plotBBoxBtn" style="padding:6px 10px; border-radius:6px; border:1px solid #333; background:#1f2937; color:#e8e8f0; cursor:pointer;">Plot BBox</button>
+    </div>
+    <canvas id="plotBBoxBoundary" width="800" height="340"></canvas>
+    <div id="out" class="log"></div>
+  </div>
+
+  <!-- ESM Apache Arrow (browser) -->
+  <script type="module" src="./arrow-loader.js"></script>
+</body>
+</html>

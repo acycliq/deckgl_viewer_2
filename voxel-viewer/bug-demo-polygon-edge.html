@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Point-in-Polygon Edge Case Bug Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0e0e10; color:#e8e8f0; margin:0; }
+    .wrap { display:flex; gap:24px; padding:16px; }
+    .panel { background:#15151a; border:1px solid #2a2a32; border-radius:10px; padding:16px; }
+    .canvas-panel { flex: 0 0 auto; }
+    .info-panel { flex: 1 1 auto; max-width: 680px; }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    h2 { font-size: 16px; margin: 16px 0 8px; }
+    code { background:#1c1c23; padding:2px 6px; border-radius:6px; }
+    .legend { display:flex; gap:12px; flex-wrap:wrap; font-size: 12px; margin-top:8px; }
+    .legend-item { display:flex; align-items:center; gap:6px; }
+    .swatch { width:14px; height:14px; border-radius:3px; border:1px solid #444; }
+    .swatch.inside { background:#2ea043; }
+    .swatch.outside { background:#6b7280; }
+    .swatch.fail { background:#ef4444; }
+    .swatch.edge { background:#f59e0b; }
+    .note { color:#b0b0c0; font-size: 13px; line-height:1.5; }
+    .list { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; background:#101015; border:1px solid #2a2a32; border-radius:8px; padding:8px; max-height: 220px; overflow:auto; }
+    .kbd { display:inline-block; border:1px solid #3a3a44; background:#1d1d25; padding:0 6px; border-radius:4px; font-family:ui-monospace, monospace; font-size:12px; }
+    .controls { display:flex; gap:12px; align-items:center; margin:8px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel canvas-panel">
+      <h1>PIP Edge Bug: On-Edge Points Treated Outside</h1>
+      <canvas id="c" width="640" height="640" style="background:#0b0b0f; display:block; border-radius:10px; border:1px solid #2a2a32;"></canvas>
+      <div class="legend">
+        <div class="legend-item"><span class="swatch inside"></span> Inside (algorithm)</div>
+        <div class="legend-item"><span class="swatch outside"></span> Outside (algorithm)</div>
+        <div class="legend-item"><span class="swatch edge"></span> On polygon edge</div>
+        <div class="legend-item"><span class="swatch fail"></span> Failure: expected inside (edge) but classified outside</div>
+      </div>
+      <div class="controls">
+        <label><input type="checkbox" id="showCenters"> Show center-sampling overlay</label>
+        <label><input type="checkbox" id="showLabels" checked> Show failing point labels</label>
+      </div>
+    </div>
+
+    <div class="panel info-panel">
+      <h2>Scenario</h2>
+      <div class="note">
+        Bounding box: top_left <code>(0.15, 0.65)</code>, bottom_right <code>(10.7, 10.9)</code>.<br/>
+        Current code floors bounds: <code>left=0</code>, <code>top=0</code>, <code>right=10</code>, <code>bottom=10</code>.<br/>
+        Integer grid therefore is <code>x ∈ [0..10]</code>, <code>y ∈ [0..10]</code>.
+      </div>
+
+      <h2>Boundary (plane 0)</h2>
+      <div class="note">
+        Cell polygon: <code>[[2.0, 1.0], [8.0, 1.0], [8.0, 8.0], [2.0, 8.0]]</code>
+      </div>
+
+      <h2>Classification Method (buggy)</h2>
+      <div class="note">
+        For voxel (x, y): test point <code>(originalX=x, originalY=y)</code> using ray-cast with strict inequalities:<br/>
+        <code>((yi &gt; y) !== (yj &gt; y)) &amp;&amp; x &lt; (xj - xi) * (y - yi) / (yj - yi) + xi</code><br/>
+        On-edge points (e.g., <code>y=1.0</code> along top edge) are treated as outside.
+      </div>
+
+      <h2>Failing Points</h2>
+      <div id="failList" class="list"></div>
+
+      <h2>Ray-cast Trace</h2>
+      <div class="note">Click a grid point on the canvas to trace the strict ray-cast test. This prints variables in the condition <code>((yi &gt; y) !== (yj &gt; y)) &amp;&amp; x &lt; (xj - xi) * (y - yi) / (yj - yi) + xi</code>.</div>
+      <div id="traceList" class="list">Click a grid point to see per-edge calculations…</div>
+
+      <h2>Fix Options</h2>
+      <div class="note">
+        Prefer center sampling: test <code>(x+0.5, y+0.5)</code> with aligned bounds, or treat on-edge as inside<br/>
+        via an explicit point-on-segment check with a small epsilon before ray-cast.
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    // Bounding box (floats)
+    const bbox = {
+      left: 0.15,
+      top: 0.65,
+      right: 10.7,
+      bottom: 10.9
+    };
+
+    // Integer bounds used by current code (floored)
+    const ibounds = {
+      left: Math.floor(bbox.left),
+      top: Math.floor(bbox.top),
+      right: Math.floor(bbox.right),
+      bottom: Math.floor(bbox.bottom)
+    };
+
+    // Polygon (subject cell) on plane 0
+    const polygon = [
+      [2.0, 1.0], [8.0, 1.0], [8.0, 8.0], [2.0, 8.0]
+    ];
+
+    // Strict ray-casting (matches current bug)
+    function isPointInPolygonStrict(x, y, poly) {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i];
+        const [xj, yj] = poly[j];
+        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }
+
+    // Edge test to highlight ambiguous points (expected to be inside)
+    function isPointOnSegment(x, y, x1, y1, x2, y2, eps = 1e-9) {
+      // Bounding box check first
+      if (x < Math.min(x1, x2) - eps || x > Math.max(x1, x2) + eps ||
+          y < Math.min(y1, y2) - eps || y > Math.max(y1, y2) + eps) {
+        return false;
+      }
+      // Cross product for colinearity
+      const cross = (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1);
+      return Math.abs(cross) <= eps;
+    }
+    // Return detailed edge info if (x,y) lies on any edge; otherwise null
+    function onWhichEdge(x, y, poly, eps = 1e-9) {
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [x1, y1] = poly[j];
+        const [x2, y2] = poly[i];
+        if (isPointOnSegment(x, y, x1, y1, x2, y2, eps)) {
+          let edgeLabel = `edge (${x1},${y1})–(${x2},${y2})`;
+          if (Math.abs(y1 - y2) <= eps) edgeLabel = `edge y=${y1}`;        // horizontal
+          if (Math.abs(x1 - x2) <= eps) edgeLabel = `edge x=${x1}`;        // vertical
+          return { x1, y1, x2, y2, edgeLabel };
+        }
+      }
+      return null;
+    }
+
+    // Center sampling (reference/fix idea)
+    function isPointInPolygonCenterSample(i, j, poly) {
+      const x = i + 0.5;
+      const y = j + 0.5;
+      return isPointInPolygonStrict(x, y, poly) || isOnAnyEdge(x, y, poly, 1e-9);
+    }
+
+    // Canvas setup
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const PAD = 40;              // pixels around drawing
+    const SCALE = 48;            // pixels per unit
+    const gridMinX = ibounds.left;
+    const gridMaxX = ibounds.right;
+    const gridMinY = ibounds.top;
+    const gridMaxY = ibounds.bottom;
+
+    function toPx(x, y) {
+      // Flip Y to screen coords (top-left origin)
+      const sx = PAD + (x - gridMinX) * SCALE;
+      const sy = canvas.height - (PAD + (y - gridMinY) * SCALE);
+      return [sx, sy];
+    }
+
+    function drawGrid() {
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#2a2a32';
+      // outer frame
+      let p1 = toPx(gridMinX, gridMinY);
+      let p2 = toPx(gridMaxX, gridMaxY);
+      const left = p1[0], bottom = p1[1];
+      const right = p2[0], top = p2[1];
+      ctx.strokeRect(left, top, right - left, bottom - top);
+      // grid lines and labels
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.fillStyle = '#9aa0a6';
+      ctx.textAlign = 'center';
+      for (let x = gridMinX; x <= gridMaxX; x++) {
+        const [gx1, gy1] = toPx(x, gridMinY);
+        const [gx2, gy2] = toPx(x, gridMaxY);
+        ctx.strokeStyle = x % 5 === 0 ? '#3a3a44' : '#2a2a32';
+        ctx.beginPath(); ctx.moveTo(gx1, gy1); ctx.lineTo(gx2, gy2); ctx.stroke();
+        ctx.fillText(String(x), gx1, gy1 + 14);
+      }
+      ctx.textAlign = 'right';
+      for (let y = gridMinY; y <= gridMaxY; y++) {
+        const [gx1, gy1] = toPx(gridMinX, y);
+        const [gx2, gy2] = toPx(gridMaxX, y);
+        ctx.strokeStyle = y % 5 === 0 ? '#3a3a44' : '#2a2a32';
+        ctx.beginPath(); ctx.moveTo(gx1, gy1); ctx.lineTo(gx2, gy2); ctx.stroke();
+        ctx.fillText(String(y), gx1 - 10, gy1 + 3);
+      }
+      ctx.restore();
+    }
+
+    function drawBBox() {
+      ctx.save();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#7c3aed';
+      const [x1, y1] = toPx(bbox.left, bbox.top);
+      const [x2, y2] = toPx(bbox.right, bbox.bottom);
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(x1, y2, x2 - x1, y1 - y2);
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#b19cd9';
+      ctx.font = '12px ui-monospace, monospace';
+      ctx.fillText('float bbox', x1 + 50, y2 - 8);
+      ctx.restore();
+    }
+
+    function drawPolygon() {
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#60a5fa';
+      ctx.fillStyle = 'rgba(96,165,250,0.08)';
+      ctx.beginPath();
+      for (let i = 0; i < polygon.length; i++) {
+        const [x, y] = polygon[i];
+        const [px, py] = toPx(x, y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      const [p0x, p0y] = toPx(polygon[0][0], polygon[0][1]);
+      ctx.lineTo(p0x, p0y);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPoints() {
+      const showCenters = document.getElementById('showCenters').checked;
+      const showLabels = document.getElementById('showLabels').checked;
+      const failures = [];
+      const sel = selectedPoint;
+
+      for (let y = gridMinY; y <= gridMaxY; y++) {
+        for (let x = gridMinX; x <= gridMaxX; x++) {
+          const edgeInfo = onWhichEdge(x, y, polygon, 1e-12);
+          const onEdge = !!edgeInfo;
+          const insideStrict = isPointInPolygonStrict(x, y, polygon);
+          const expectedInside = onEdge || insideStrict; // Treat on-edge as inside expectation
+
+          // Color decision
+          let color = '#6b7280'; // outside (algorithm)
+          if (insideStrict) color = '#2ea043'; // inside (algorithm)
+          if (onEdge && !insideStrict) color = '#ef4444'; // failure: on-edge but classified outside
+
+          const [px, py] = toPx(x, y);
+          // Draw point
+          ctx.save();
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(px, py, 5, 0, Math.PI * 2);
+          ctx.fill();
+          // Outline on-edge points
+          if (onEdge) {
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#f59e0b';
+            ctx.stroke();
+          }
+          // Selection highlight
+          if (sel && sel.x === x && sel.y === y) {
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#22d3ee'; // cyan
+            ctx.beginPath();
+            ctx.arc(px, py, 8, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          // Label failures
+          if (onEdge && !insideStrict) {
+            failures.push([x, y, edgeInfo.edgeLabel]);
+            if (showLabels) {
+              ctx.fillStyle = '#ef4444';
+              ctx.font = '12px ui-monospace, monospace';
+              ctx.textAlign = 'left';
+              ctx.fillText(`(${x},${y}) on ${edgeInfo.edgeLabel} -> outside`, px + 8, py - 8);
+            }
+          }
+          ctx.restore();
+
+          // Optional: overlay center-sampling classification
+          if (showCenters) {
+            const csInside = isPointInPolygonCenterSample(x, y, polygon);
+            const [cx, cy] = toPx(x + 0.5, y + 0.5);
+            ctx.save();
+            ctx.strokeStyle = csInside ? 'rgba(46,160,67,0.9)' : 'rgba(107,114,128,0.9)';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
+
+      // Update list
+      const list = document.getElementById('failList');
+      if (failures.length === 0) {
+        list.textContent = 'No failures under current settings';
+      } else {
+        list.innerHTML = failures
+          .map(([x, y, label]) => `(${x}, ${y}) on ${label} → classified outside`)
+          .join('\n');
+      }
+    }
+
+    // Invert screen to data coords
+    function fromPx(sx, sy) {
+      const x = (sx - PAD) / SCALE + gridMinX;
+      const y = (canvas.height - sy - PAD) / SCALE + gridMinY;
+      return [x, y];
+    }
+
+    // Ray-cast trace for a specific integer grid point
+    function generateRaycastTrace(ix, iy, poly) {
+      const lines = [];
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i];
+        const [xj, yj] = poly[j];
+        const condA_left = yi > iy; // (yi > y)
+        const condA_right = yj > iy; // (yj > y)
+        const condA = (condA_left !== condA_right); // ((yi > y) !== (yj > y))
+        let xIntersect = NaN;
+        let condB = false;
+        if (condA) {
+          xIntersect = (xj - xi) * (iy - yi) / (yj - yi) + xi;
+          condB = ix < xIntersect; // x < xIntersect
+          if (condB) inside = !inside;
+        }
+        lines.push({
+          i, j, xi, yi, xj, yj,
+          y: iy, x: ix,
+          condA_left, condA_right, condA,
+          xIntersect,
+          condB,
+          toggled: condA && condB,
+          insideAfter: inside
+        });
+      }
+      return { steps: lines, finalInside: inside };
+    }
+
+    function renderTrace(ix, iy) {
+      const t = generateRaycastTrace(ix, iy, polygon);
+      const el = document.getElementById('traceList');
+      const head = `Point (x=${ix}, y=${iy}) — strict ray-cast trace\n`;
+      const rows = t.steps.map(s => {
+        const xInt = Number.isFinite(s.xIntersect) ? s.xIntersect.toFixed(3) : '—';
+        return (
+          `edge j→i=(${s.j}→${s.i})  xi=${s.xi}, yi=${s.yi}; xj=${s.xj}, yj=${s.yj} | ` +
+          `((yi>y)!=(yj>y))=${s.condA_left}>${s.y}? ${s.condA_left} ; ${s.condA_right}>${s.y}? ${s.condA_right} ⇒ ${s.condA} | ` +
+          `xIntersect=${xInt} | x<xi? ${s.x}<${xInt} ⇒ ${s.condB} | toggled=${s.toggled} | inside=${s.insideAfter}`
+        );
+      });
+      const tail = `\nFinal inside=${t.finalInside}`;
+      el.textContent = head + rows.join('\n') + tail;
+    }
+
+    // Selection state and click handler
+    let selectedPoint = null;
+    canvas.addEventListener('click', (evt) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = evt.clientX - rect.left;
+      const sy = evt.clientY - rect.top;
+      const [dx, dy] = fromPx(sx, sy);
+      const ix = Math.round(dx);
+      const iy = Math.round(dy);
+      if (ix < gridMinX || ix > gridMaxX || iy < gridMinY || iy > gridMaxY) {
+        selectedPoint = null;
+        document.getElementById('traceList').textContent = 'Click within the grid to trace the ray-cast.';
+        redraw();
+        return;
+      }
+      selectedPoint = { x: ix, y: iy };
+      renderTrace(ix, iy);
+      redraw();
+    });
+
+    function redraw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+      drawBBox();
+      drawPolygon();
+      drawPoints();
+    }
+
+    document.getElementById('showCenters').addEventListener('change', redraw);
+    document.getElementById('showLabels').addEventListener('change', redraw);
+    redraw();
+  })();
+  </script>
+</body>
+</html>

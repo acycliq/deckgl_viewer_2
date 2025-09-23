@@ -1,0 +1,915 @@
+/* Combined Gene Expression and Cell Boundary Viewer Styles */
+
+/* Cell Info Panel */
+.cell-info-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 0;
+    max-height: 500px;
+    background: rgba(31, 41, 55, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #e8e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    z-index: 2000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.cell-info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.cell-info-content {
+    padding: 8px;
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+/* Two-column layout: table left, donut right */
+.cell-info-layout {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+}
+
+.cell-info-left, .cell-info-right {
+    flex: 0 1 auto;
+}
+
+/* Constrain heights to match donut svg height */
+.cell-info-left {
+    max-height: 160px;
+    overflow: auto;
+}
+
+.cell-info-right #cellInfoChart svg {
+    display: block;
+}
+
+.cell-info-chart-container {
+    text-align: center;
+    margin: 0;
+}
+
+.cell-info-tables {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.table-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cell-info-panel table {
+    font-size: 11px;
+}
+
+.cell-info-panel table thead th {
+    background: rgba(0,0,0,0.2);
+    color: #94a3b8;
+    padding: 6px 8px;
+    text-transform: uppercase;
+    font-size: 10px;
+}
+
+.cell-info-panel table tbody td {
+    padding: 4px 8px;
+}
+
+.cell-info-panel .dataTables_wrapper {
+    padding: 0;
+}
+
+.cell-info-panel .dataTables_wrapper .dataTables_length,
+.cell-info-panel .dataTables_wrapper .dataTables_filter,
+.cell-info-panel .dataTables_wrapper .dataTables_info,
+.cell-info-panel .dataTables_wrapper .dataTables_paginate {
+    display: none;
+}
+
+.cell-info-panel table.dataTable {
+    background: transparent;
+    color: #e8e8f0;
+    border-collapse: collapse;
+}
+
+.cell-info-panel table.dataTable thead th {
+    background: rgba(0, 0, 0, 0.2);
+    color: #94a3b8;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 8px;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.cell-info-panel table.dataTable tbody td {
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: #e8e8f0;
+}
+
+.cell-info-panel table.dataTable tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Donut chart styles */
+.cell-info-panel .slices path {
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 1px;
+}
+
+.cell-info-panel .sliceLabels text {
+    font-size: 10px;
+    fill: #e8e8f0;
+    pointer-events: none;
+}
+
+.cell-info-panel .lines polyline {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.45);
+    stroke-width: 1px;
+}
+
+.donutTooltip {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Cell Search Modal */
+.cell-search-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+}
+
+.cell-search-dialog {
+    background: #1a1a1a;
+    border: 2px solid #0066cc;
+    border-radius: 8px;
+    padding: 30px;
+    max-width: 400px;
+    width: 90%;
+    color: white;
+}
+
+.cell-search-dialog h3 {
+    margin-top: 0;
+    color: #0066cc;
+    text-align: center;
+}
+
+.cell-search-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #333;
+    color: #fff;
+    font-size: 16px;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+}
+
+.cell-search-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.cell-search-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.cell-search-btn.primary {
+    background: #0066cc;
+    color: white;
+}
+
+.cell-search-btn.primary:hover {
+    background: #0052a3;
+}
+
+.cell-search-btn.secondary {
+    background: #444;
+    color: white;
+}
+
+.cell-search-btn.secondary:hover {
+    background: #555;
+}
+
+.cell-search-status {
+    margin-top: 15px;
+    text-align: center;
+    font-size: 14px;
+    min-height: 20px;
+}
+
+.cell-search-status.error {
+    color: #ff6b6b;
+}
+
+.cell-search-status.success {
+    color: #00ff88;
+}
+
+/* Base Styles */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+    background-color: #000;
+    color: #fff;
+}
+
+#map {
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Gene Panel Button */
+#genePanelBtn {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 13px;
+    user-select: none;
+}
+
+#genePanelBtn:hover {
+    color: #007bff;
+}
+
+/* Gene Distribution Button - same styling as Gene Panel Button */
+#geneDistributionBtn {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 13px;
+    user-select: none;
+}
+
+#geneDistributionBtn:hover {
+    color: #007bff;
+}
+
+/* Top-right action buttons (Cell Classes, Christina, scRNAseq) */
+#cellClassPanelBtn,
+#cellClassViewerBtn,
+#scrnaSeqBtn,
+#classesByZBtn {
+    position: absolute;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #1f2937; /* match Selection tool */
+    color: #e8e8f0;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px; /* ensure text is visible */
+    line-height: 1;
+    width: 100px; /* make both buttons same length */
+}
+
+#cellClassPanelBtn {
+    top: 12px;
+    right: 12px;
+}
+
+#cellClassViewerBtn {
+    top: 45px; /* add extra space below Cell Classes */
+    right: 12px;
+}
+
+#scrnaSeqBtn {
+    top: 78px; /* placed right under Christina */
+    right: 12px;
+}
+
+#classesByZBtn {
+    top: 111px; /* placed right under scRNAseq */
+    right: 12px;
+}
+
+#cellClassPanelBtn:hover,
+#cellClassViewerBtn:hover,
+#scrnaSeqBtn:hover,
+#classesByZBtn:hover {
+    background: #111827;
+    border-color: #475569;
+    color: #ffffff;
+}
+
+/* removed duplicate scRNAseq styling; now unified above */
+
+/* Aggregated Classes Button */
+#aggregatedClassesBtn {
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    border: none;
+    /*padding: 8px 12px;*/
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+#aggregatedClassesBtn:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: translateY(-1px);
+}
+
+/* Main Controls */
+.main-controls {
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 5px;
+    border-radius: 4px;
+    backdrop-filter: blur(10px);
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    font-size: 13px;
+}
+
+#planeSlider {
+    width: 250px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    appearance: none;
+    outline: none;
+}
+
+#planeSlider::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+#planeSlider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+#planeLabel {
+    min-width: 80px;
+    text-align: center;
+    font-weight: normal;
+    color: rgba(255, 255, 255, 0.9);
+    font-family: monospace;
+}
+
+.nav-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    padding: 4px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 14px;
+    user-select: none;
+}
+
+.nav-btn:hover {
+    color: #007bff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Minimal Layer Controls */
+.minimal-controls {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: rgba(0, 0, 0, 0.0);
+    /*padding: 8px 12px;*/
+    padding: 4px 4px;
+    z-index: 10;
+    border-radius: 4px;
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    color: white;
+}
+
+.control-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.control-item input[type="checkbox"] {
+    transform: scale(0.9);
+    accent-color: #007bff;
+}
+
+.control-item label {
+    font-size: 13px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.9);
+    user-select: none;
+}
+
+.gene-size-item {
+    gap: 4px;
+}
+
+.gene-size-item input[type="range"] {
+    width: 60px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    appearance: none;
+    outline: none;
+}
+
+.gene-size-item input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.gene-size-item input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.gene-size-item #geneSizeValue {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.8);
+    min-width: 24px;
+    text-align: center;
+    font-family: monospace;
+}
+
+/* Score Filter Slider - same styling as gene size slider */
+.score-filter-item {
+    gap: 4px;
+}
+.score-filter-item input[type="range"] {
+    width: 60px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    appearance: none;
+    outline: none;
+}
+.score-filter-item input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+.score-filter-item input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+.score-filter-item #scoreFilterValue {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.8);
+    min-width: 24px;
+    text-align: center;
+    font-family: monospace;
+}
+
+/* Polygon Opacity Slider */
+.polygon-opacity-item {
+    gap: 4px;
+}
+
+.polygon-opacity-item input[type="range"] {
+    width: 60px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    appearance: none;
+    outline: none;
+}
+
+.polygon-opacity-item input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.polygon-opacity-item input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.polygon-opacity-item #polygonOpacityValue {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.8);
+    min-width: 24px;
+    text-align: center;
+    font-family: monospace;
+}
+
+/* Floating Gene Widget */
+.widget-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    /* Removed backdrop-filter blur to keep main window sharp */
+}
+
+.gene-widget {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    width: 400px;
+    max-height: 500px;
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gene-widget.dragging {
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8);
+    cursor: move;
+    transition: none;
+}
+
+.gene-widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: move;
+    user-select: none;
+}
+
+.gene-widget-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.widget-header-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.gene-widget-title {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.widget-close-btn,
+.widget-undock-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.widget-close-btn {
+    font-size: 24px;
+}
+
+.widget-close-btn:hover,
+.widget-undock-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.widget-undock-btn:hover {
+    color: #007bff;
+}
+
+.gene-widget-search {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.gene-widget-search input {
+    flex: 1;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: white;
+    font-size: 14px;
+    outline: none;
+}
+
+.toggle-all-btn {
+    padding: 8px 16px;
+    background: #007bff;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
+}
+
+.toggle-all-btn:hover {
+    background: #0056b3;
+}
+
+.toggle-all-btn.unselect {
+    background: #dc3545;
+}
+
+.toggle-all-btn.unselect:hover {
+    background: #c82333;
+}
+
+.gene-widget-search input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.gene-widget-search input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.gene-widget-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.gene-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 20px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    gap: 12px;
+}
+
+.gene-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.gene-checkbox {
+    transform: scale(1.1);
+    accent-color: #007bff;
+}
+
+.gene-glyph {
+    width: 20px;
+    height: 20px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.gene-name {
+    color: white;
+    font-size: 13px;
+    font-family: monospace;
+    flex: 1;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Removed old animation - using new slide-in effect */
+
+/* Scrollbar styling for widget */
+.gene-widget-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.gene-widget-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.gene-widget-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.gene-widget-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+
+/* Loading indicator */
+.loading-indicator {
+    position: absolute;
+    top: 60px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 6px;
+    z-index: 10;
+    display: none;
+}
+
+/* Minimize button */
+.minimize-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.layer-controls.minimized {
+    height: 40px;
+    overflow: hidden;
+}
+
+.layer-controls.minimized .control-section {
+    display: none;
+}
+
+/* Tooltip */
+#tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: none;
+    white-space: nowrap;
+    z-index: 1000;
+    max-width: 300px;
+}
+
+/* Scale Bar */
+.scale-bar {
+    position: absolute;
+    bottom: 15px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+    z-index: 10;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.scale-bar-line {
+    width: 100px;
+    height: 2px;
+    background: white;
+    border-radius: 1px;
+}
+
+.scale-bar-label {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+/* Coordinate Display */
+.coordinate-display {
+    position: fixed;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    z-index: 1000;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.coordinate-display span {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Selection Mode Notification */
+#selection-mode-notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(34, 139, 34, 0.9);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 10001;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border: 2px solid #22C55E;
+    display: none;
+}

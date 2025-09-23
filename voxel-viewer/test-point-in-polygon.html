@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Point-in-Polygon-Hao Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            cursor: crosshair;
+        }
+        .info {
+            margin: 10px 0;
+        }
+        .legend {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .legend div {
+            margin: 5px 0;
+        }
+        .inside { color: red; font-weight: bold; }
+        .boundary { color: orange; font-weight: bold; }
+        .outside { color: blue; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Point-in-Polygon-Hao Test</h1>
+    <p>Click anywhere on the canvas to test points. The real cell boundary is shown in red.</p>
+    
+    <div class="legend">
+        <div class="inside">🔴 Red = Inside polygon</div>
+        <div class="boundary">🟠 Orange = On boundary (exactly)</div>
+        <div class="outside">🔵 Blue = Outside polygon</div>
+    </div>
+    
+    <canvas id="canvas" width="600" height="400"></canvas>
+    
+    <div class="info">
+        <div id="lastResult">Click to test points...</div>
+        <div id="mousePos">Mouse: (0, 0)</div>
+    </div>
+    
+    <!-- Load the point-in-polygon-hao library -->
+    <script src="https://unpkg.com/point-in-polygon-hao@1.2.4/dist/pointInPolygon.min.js"></script>
+    
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const lastResultDiv = document.getElementById('lastResult');
+        const mousePosDiv = document.getElementById('mousePos');
+        
+        // Real cell boundary data from bio-demo
+        const realCellBoundary = [
+            [3202, 2018.0000000000002],
+            [3196, 2018.0000000000002],
+            [3193, 2017.0000000000002],
+            [3192, 2015.0000000000002],
+            [3194, 2012],
+            [3194, 2010.0000000000002],
+            [3196, 2008],
+            [3199, 2009.0000000000002],
+            [3203, 2014.0000000000002],
+            [3203, 2017.0000000000002],
+            [3202, 2018.0000000000002]  // Already closed
+        ];
+        
+        console.log('Real cell boundary loaded:', realCellBoundary);
+        console.log('Boundary length:', realCellBoundary.length);
+        console.log('Is closed:', realCellBoundary[0][0] === realCellBoundary[realCellBoundary.length-1][0] && 
+                                   realCellBoundary[0][1] === realCellBoundary[realCellBoundary.length-1][1]);
+        
+        function drawPolygon() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate bounds of real cell boundary
+            const xs = realCellBoundary.map(p => p[0]);
+            const ys = realCellBoundary.map(p => p[1]);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            
+            console.log('Cell boundary bounds:', {minX, maxX, minY, maxY});
+            console.log('Cell size:', {width: maxX - minX, height: maxY - minY});
+            
+            // Scale and center the real cell boundary to fit canvas
+            const padding = 50;
+            const availableWidth = canvas.width - 2 * padding;
+            const availableHeight = canvas.height - 2 * padding;
+            
+            const scaleX = availableWidth / (maxX - minX);
+            const scaleY = availableHeight / (maxY - minY);
+            const scale = Math.min(scaleX, scaleY); // Keep aspect ratio
+            
+            const offsetX = padding + (availableWidth - (maxX - minX) * scale) / 2;
+            const offsetY = padding + (availableHeight - (maxY - minY) * scale) / 2;
+            
+            console.log('Display scaling:', {scale, offsetX, offsetY});
+            
+            // Convert real coordinates to canvas coordinates
+            window.realToCanvas = (realX, realY) => [
+                (realX - minX) * scale + offsetX,
+                (realY - minY) * scale + offsetY
+            ];
+            
+            // Convert canvas coordinates back to real coordinates  
+            window.canvasToReal = (canvasX, canvasY) => [
+                (canvasX - offsetX) / scale + minX,
+                (canvasY - offsetY) / scale + minY
+            ];
+            
+            // Draw the real cell boundary
+            ctx.fillStyle = 'rgba(200, 100, 100, 0.3)';
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            const [startX, startY] = realToCanvas(realCellBoundary[0][0], realCellBoundary[0][1]);
+            ctx.moveTo(startX, startY);
+            
+            for (let i = 1; i < realCellBoundary.length; i++) {
+                const [x, y] = realToCanvas(realCellBoundary[i][0], realCellBoundary[i][1]);
+                ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Draw coordinate info
+            ctx.fillStyle = 'black';
+            ctx.font = '12px Arial';
+            ctx.fillText(`Real coords: (${minX.toFixed(0)}, ${minY.toFixed(0)}) to (${maxX.toFixed(0)}, ${maxY.toFixed(0)})`, 10, 20);
+            ctx.fillText(`Cell size: ${(maxX - minX).toFixed(1)} × ${(maxY - minY).toFixed(1)}`, 10, 35);
+        }
+        
+        function testPoint(canvasX, canvasY) {
+            // Convert canvas coordinates to real coordinates
+            const [realX, realY] = canvasToReal(canvasX, canvasY);
+            
+            console.log('\n🧪 Testing point:');
+            console.log('  Canvas coords:', [canvasX, canvasY]);
+            console.log('  Real coords:', [realX, realY]);
+            
+            try {
+                // Test with real cell boundary - wrap in array for proper format
+                const polygonToTest = [realCellBoundary]; // Library expects array of rings
+                
+                console.log('  Polygon format: array of', polygonToTest.length, 'rings');
+                console.log('  First ring length:', polygonToTest[0].length);
+                
+                // Call the library function using REAL coordinates
+                const result = pointInPolygon([realX, realY], polygonToTest);
+                
+                console.log('  Raw result:', result, typeof result);
+                
+                // Draw the test point on canvas
+                ctx.fillStyle = result === true ? 'red' : 
+                              result === 0 ? 'orange' : 'blue';
+                ctx.beginPath();
+                ctx.arc(canvasX, canvasY, 5, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Update result display
+                const resultText = result === true ? 'INSIDE' :
+                                 result === 0 ? 'ON BOUNDARY' : 'OUTSIDE';
+                const resultColor = result === true ? 'red' :
+                                  result === 0 ? 'orange' : 'blue';
+                                  
+                lastResultDiv.innerHTML = `
+                    Canvas (${canvasX}, ${canvasY}) → Real (${realX.toFixed(2)}, ${realY.toFixed(2)}): 
+                    <span style="color: ${resultColor}; font-weight: bold;">${resultText}</span> (raw: ${result})
+                `;
+                
+                return result;
+                
+            } catch (error) {
+                console.error('❌ Error testing point:', error);
+                console.log('Error details:', error.message);
+                lastResultDiv.innerHTML = `Error: ${error.message}`;
+                
+                // Draw error point in purple
+                ctx.fillStyle = 'purple';
+                ctx.beginPath();
+                ctx.arc(canvasX, canvasY, 5, 0, 2 * Math.PI);expla
+                ctx.fill();
+                
+                return null;
+            }
+        }
+        
+        // Test some predefined points around the real cell boundary
+        function runTests() {
+            console.log('🧪 Running predefined tests on real cell boundary...');
+            
+            // Calculate center of real cell boundary
+            const centerX = (3202 + 3192) / 2; // ~3197
+            const centerY = (2018 + 2008) / 2; // ~2013
+            
+            const testPointsReal = [
+                [centerX, centerY], // Center of cell - should be INSIDE
+                [3202, 2018], // Boundary vertex - should be ON BOUNDARY
+                [3196, 2008], // Another boundary vertex - should be ON BOUNDARY
+                [3180, 2000], // Outside left - should be OUTSIDE
+                [3220, 2020], // Outside right - should be OUTSIDE
+                [centerX - 1, centerY], // Just inside from center - should be INSIDE
+            ];
+            
+            testPointsReal.forEach(realPoint => {
+                console.log(`\n--- Testing real point [${realPoint[0].toFixed(1)}, ${realPoint[1].toFixed(1)}] ---`);
+                const [canvasX, canvasY] = realToCanvas(realPoint[0], realPoint[1]);
+                testPoint(canvasX, canvasY);
+            });
+        }
+        
+        // Event handlers
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            testPoint(Math.round(x), Math.round(y));
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.round(e.clientX - rect.left);
+            const y = Math.round(e.clientY - rect.top);
+            mousePosDiv.textContent = `Mouse: (${x}, ${y})`;
+        });
+        
+        // No toggle functionality needed for real cell boundary test
+        
+        // Initialize
+        console.log('🚀 Point-in-Polygon-Hao Test initialized with real cell boundary');
+        console.log('Library available:', typeof pointInPolygon);
+        console.log('Real cell boundary bounds:', {minX: Math.min(...realCellBoundary.map(p => p[0])), maxX: Math.max(...realCellBoundary.map(p => p[0])), minY: Math.min(...realCellBoundary.map(p => p[1])), maxY: Math.max(...realCellBoundary.map(p => p[1]))});
+        
+        drawPolygon();
+        
+        // Run automated tests after a short delay
+        setTimeout(runTests, 1000);
+        
+    </script>
+</body>
+</html>
