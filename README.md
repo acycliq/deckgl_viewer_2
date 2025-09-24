@@ -1,7 +1,10 @@
 https://acycliq.github.io/deckgl_viewer_2/
 
+# Counts per Class
+ 
+[View interactive charts](https://acycliq.github.io/deckgl_viewer_2/counts_per_class.html)
 
-
+```aiignore
 'Inefficiency': 2.0,
 'MisreadDensity': {'default': 1e-6},
 'nNeighbors': 6,
@@ -10,3 +13,4 @@ https://acycliq.github.io/deckgl_viewer_2/
 'voxel_size': [0.28, 0.28, 0.7],
 'remove_flat_cells': True,
 'rSpot': 0.5,
+```
